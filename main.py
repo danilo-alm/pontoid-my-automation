@@ -34,10 +34,10 @@ def main(website: str, date_range: tuple = None):
     
     while True:
         table, btn_next = get_table_elements(driver, wait)
+        handle_table(driver, table, actions, wait, logger)
+
         if btn_next is None:
             break
-        
-        handle_table(driver, table, actions, wait, logger)
         actions.move_to_element(btn_next).click().perform()
     
 
