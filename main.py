@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import sleep
 import logging
 import sys
 import os
@@ -22,35 +23,25 @@ def main(website: str, date_range: tuple = None):
     driver.implicitly_wait(10)
     
     actions = ActionChains(driver)
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 120)
     driver.get(website)
     
-    user, password = get_credentials()
-    login(driver, user, password)
-
-    del user, password
-    
-    navigate_to_conteudo_aplicado(driver)
+    login(driver, *get_credentials())
+    navigate_to_conteudo_aplicado(driver, actions, wait)
     
     while True:
         table, btn_next = get_table_elements(driver, wait)
         handle_table(driver, table, actions, wait, logger)
-
-        if btn_next is None:
-            break
         actions.move_to_element(btn_next).click().perform()
     
 
 def get_table_elements(driver, wait):
-    table = driver.find_element(By.ID, 'tabelaConteudoAplicado')
-    wait.until(EC.visibility_of(table))
-    
-    table_paginate_next_div = driver.find_element(By.ID, 'tabelaConteudoAplicado_next')
-    wait.until(EC.visibility_of(table_paginate_next_div))
-    try:
-        table_paginate_next = table_paginate_next_div.find_element(By.TAG_NAME, 'a')
-    except:
-        table_paginate_next = None
+    table = wait.until(EC.visibility_of(
+        driver.find_element(By.ID, 'tabelaConteudoAplicado')
+    ))
+    table_paginate_next = wait.until(EC.visibility_of(
+        driver.find_element(By.XPATH, '//*[@id="tabelaConteudoAplicado_next"]//a')
+    ))
     return table, table_paginate_next
 
 
@@ -68,9 +59,10 @@ def filter_date(date_str, logger):
 
 
 def handle_copy_dialog(date, driver, actions, wait, logger):
-    elem = driver.find_element(By.ID, 'DataAula')
-    wait.until(EC.visibility_of(elem))
-    actions.move_to_element(elem).perform()
+    elem = wait.until(EC.visibility_of(
+        driver.find_element(By.ID, 'DataAula')
+    ))
+    sleep(1)
     elem.click()
     elem.send_keys(date)
 
@@ -104,11 +96,9 @@ def handle_copy_dialog(date, driver, actions, wait, logger):
 
 
 def handle_table_row(driver, row, actions, wait, logger):
-    date_id_td = row.find_element(By.XPATH, './td[@data-id]')
-    # FIX: ESPERA INFINITA?
-    # Tentar obter <td> correto por outro metodo...
-    wait.until(EC.visibility_of(date_id_td))
-    date_str = date_id_td.text.strip()
+    date_str = wait.until(EC.visibility_of(
+        row.find_element(By.XPATH, './/td[1]')
+    )).text.strip()
     
     if not date_str:
         logger.error(f'Date is empty for row {row}')
@@ -117,15 +107,16 @@ def handle_table_row(driver, row, actions, wait, logger):
     if not filter_date(date_str, logger):
         return
     
-    link_copy = row.find_element(By.XPATH, ".//a[@title='Copia esse conteúdo aplicado para outras turmas']")
-    wait.until(EC.element_to_be_clickable(link_copy))
+    link_copy = wait.until(EC.element_to_be_clickable(
+        row.find_element(By.XPATH, ".//a[@title='Copia esse conteúdo aplicado para outras turmas']")
+    ))
     actions.move_to_element(link_copy).click().perform()
     
     handle_copy_dialog(date_str, driver, actions, wait, logger)
     
 
 def handle_table(driver, table, actions, wait, logger):
-    rows = table.find_elements(By.XPATH, "//tr[not(parent::thead)]")
+    rows = table.find_elements(By.XPATH, './/tr[not(parent::thead)]')
     for row in rows:
         handle_table_row(driver, row, actions, wait, logger)
 
@@ -148,6 +139,7 @@ def login(driver, user, password):
     elem = driver.find_element(By.ID, 'btn-entrar')
     elem.click()
 
+
 def get_credentials():
     user = os.getenv('MYUSER')
     password = os.getenv('PASSWORD')
@@ -161,16 +153,22 @@ def get_driver():
     return driver
 
 
-def navigate_to_conteudo_aplicado(driver):
-    elem = driver.find_element(By.CSS_SELECTOR, "a[data-acaonaturma='ConteudoAplicado']")
-    elem.click()
+def navigate_to_conteudo_aplicado(driver, actions, wait):
+    elem = wait.until(EC.element_to_be_clickable(
+        driver.find_element(By.CSS_SELECTOR, "a[data-acaonaturma='ConteudoAplicado']")
+    ))
+    actions.move_to_element(elem).click().perform()
+
+    sleep(1)
     
-    elem = driver.find_element(By.ID, 'btn-carregar-dados')
-    elem.click()
- 
+    elem = wait.until(EC.element_to_be_clickable(
+        driver.find_element(By.ID, 'btn-carregar-dados')
+    ))
+    actions.move_to_element(elem).click().perform()
+
 
 DATE_FORMAT = '%d/%m/%Y'
-DATE_FROM = datetime.strptime('29/02/2024', DATE_FORMAT)  # exclusive
+DATE_FROM = datetime.strptime('05/03/2024', DATE_FORMAT)  # exclusive
 TURMAS = [
     #'1º ANO B - EMEB. MONTEIRO LOBATO',
     '1º ANO C - EMEB. MONTEIRO LOBATO',
